@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Praktikum 5: Endpoint REST API Mahasiswa Berbasis MySQL & PDO
  * File: api/mahasiswa.php
@@ -9,6 +10,7 @@
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
+header('Content-Type: application/json; charset=UTF-8');
 
 // Tangani HTTP OPTIONS Pre-flight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -66,32 +68,39 @@ switch ($method) {
 /**
  * 1. Menangani HTTP GET (Ambil Semua Data atau Berdasarkan ID)
  */
-function handleGet(PDO $pdo, ?int $id): void {
+function handleGet(PDO $pdo, ?int $id): void
+{
     if ($id !== null && $id > 0) {
         //Percobaan 5-2 Langkah 2 jika id diberikan
-
+        $stmt = $pdo->prepare('SELECT * FROM mahasiswa WHERE id = :id');
+        $stmt->execute([':id' => $id]);
     } else {
         $search = isset($_GET['search']) ? trim($_GET['search']) : '';
         if (!empty($search)) {
             //Percobaan 5-2 Langkah 2 jika search ada
+            $stmt = $pdo->prepare('SELECT * FROM mahasiswa WHERE nama LIKE :search OR program_studi LIKE :search OR email LIKE :search');
+            $stmt->execute([':search' => "%{$search}%"]);
         } else {
             //Percobaan 5-2 Langkah 2 jika tidak ada search
+            $stmt = $pdo->prepare('SELECT * FROM mahasiswa');
+            $stmt->execute();
         }
-
-        $result = $stmt->fetchAll();
-        http_response_code(200);
-        echo json_encode([
-            'status' => 'success',
-            'total' => count($result),
-            'data' => $result
-        ]);
     }
+
+    $result = $stmt->fetchAll();
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'total' => count($result),
+        'data' => $result
+    ]);
 }
 
 /**
  * 2. Menangani HTTP POST (Tambah Data Mahasiswa Baru)
  */
-function handlePost(PDO $pdo): void {
+function handlePost(PDO $pdo): void
+{
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) {
         $input = $_POST;
@@ -142,13 +151,43 @@ function handlePost(PDO $pdo): void {
 /**
  * 3. Menangani HTTP PUT (Perbarui Data Mahasiswa)
  */
-function handlePut(PDO $pdo, ?int $id): void {
-   
+function handlePut(PDO $pdo, ?int $id): void
+{
+    if (!$id) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'ID mahasiswa wajib disertakan.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $stmt = $pdo->prepare('UPDATE mahasiswa SET npm = :npm, nama = :nama, program_studi = :prodi, angkatan = :angkatan, email = :email WHERE id = :id');
+    $stmt->execute([
+        ':npm' => trim($input['npm'] ?? ''),
+        ':nama' => trim($input['nama'] ?? ''),
+        ':prodi' => trim($input['program_studi'] ?? ''),
+        ':angkatan' => (int)($input['angkatan'] ?? 0),
+        ':email' => trim($input['email'] ?? ''),
+        ':id' => $id
+    ]);
+
+    http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'Data mahasiswa berhasil diperbarui.']);
 }
 
 /**
  * 4. Menangani HTTP DELETE (Hapus Data Mahasiswa)
  */
-function handleDelete(PDO $pdo, ?int $id): void {
-    
+function handleDelete(PDO $pdo, ?int $id): void
+{
+    if (!$id) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'ID mahasiswa wajib disertakan.']);
+        return;
+    }
+
+    $stmt = $pdo->prepare('DELETE FROM mahasiswa WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+
+    http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'Data mahasiswa berhasil dihapus.']);
 }
